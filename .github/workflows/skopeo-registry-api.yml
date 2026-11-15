@@ -28,6 +28,7 @@ jobs:
         shell: pwsh
         env:
           GOTOOLCHAIN: local
+          GOWORK: 'off'
           CGO_ENABLED: '0'
         run: |
           $ErrorActionPreference = 'Stop'
