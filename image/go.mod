@@ -14,7 +14,6 @@ require (
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.9.0+incompatible
-	github.com/docker/distribution v2.8.3+incompatible
 	github.com/docker/docker-credential-helpers v0.9.10
 	github.com/docker/go-connections v0.8.2
 	github.com/hashicorp/go-cleanhttp v0.5.2
@@ -59,6 +58,7 @@ require (
 	github.com/containerd/stargz-snapshotter/estargz v0.19.0 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
+	github.com/distribution/distribution/v3 v3.1.2
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect

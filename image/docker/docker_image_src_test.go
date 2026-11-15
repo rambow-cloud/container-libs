@@ -17,8 +17,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/distribution/registry/api/errcode"
-	v2 "github.com/docker/distribution/registry/api/v2"
+	"github.com/distribution/distribution/v3/registry/api/errcode"
+	v2 "github.com/distribution/distribution/v3/registry/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.podman.io/image/v5/internal/private"
