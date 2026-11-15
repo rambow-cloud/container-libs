@@ -1,0 +1,78 @@
+name: Prepare skopeo Windows registry API sources
+on:
+  push:
+    branches: [skopeo-win/image-registry-api, skopeo-win/common-registry-api]
+    paths: [.github/workflows/skopeo-registry-api.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: library
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rambow-cloud/skopeo-win
+          ref: 85ea84da018843f3a2ccabc40f9b7ce86cf58771
+          path: project
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Migrate API imports and module requirements
+        working-directory: library
+        shell: pwsh
+        env:
+          GOTOOLCHAIN: local
+          CGO_ENABLED: '0'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $part = if ($env:GITHUB_REF_NAME -eq 'skopeo-win/image-registry-api') { 'image' } else { 'common' }
+          foreach ($file in Get-ChildItem -LiteralPath $part -Recurse -File -Filter '*.go') {
+            $old = [IO.File]::ReadAllText($file.FullName)
+            $new = $old.Replace('"github.com/docker/distribution/registry/api/', '"github.com/distribution/distribution/v3/registry/api/')
+            if ($new -cne $old) {
+              Write-Host "Migrating $($file.FullName)"
+              [IO.File]::WriteAllText($file.FullName, $new)
+              gofmt -w $file.FullName
+              if ($LASTEXITCODE -ne 0) { throw 'Cannot format migrated API imports' }
+            }
+            if ($new -match '"github.com/docker/distribution(?:/|")') { throw "Unmigrated legacy import: $($file.FullName)" }
+          }
+          if ($part -eq 'image') {
+            git apply -p5 --directory=image ../project/hack/vendor-patches/image-windows-archive-paths.patch
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot retain the reviewed Windows archive patch' }
+          }
+          Push-Location $part
+          try {
+            go mod edit '-droprequire=github.com/docker/distribution' '-require=github.com/distribution/distribution/v3@v3.1.2'
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot update Distribution module requirement' }
+            if ($part -eq 'common') {
+              go mod edit '-require=go.podman.io/image/v5@v5.42.1' '-replace=go.podman.io/image/v5=github.com/rambow-cloud/container-libs/image/v5@v5.42.1-skopeo.1'
+              if ($LASTEXITCODE -ne 0) { throw 'Cannot align the reviewed image fork' }
+            }
+            go mod tidy
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot tidy migrated module' }
+            $graph = @(go mod graph)
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect complete module graph' }
+            $legacy = @($graph | Where-Object { $_ -match 'github.com/docker/distribution@' })
+            if ($legacy.Count) { $legacy | Write-Host; throw 'Legacy module remains in the graph' }
+            if ($part -eq 'image') {
+              go test -tags 'containers_image_openpgp exclude_graphdriver_btrfs' ./docker
+            } else {
+              go test -tags 'containers_image_openpgp exclude_graphdriver_btrfs' ./pkg/retry ./pkg/json-proxy
+            }
+            if ($LASTEXITCODE -ne 0) { throw 'Migrated registry API tests failed' }
+          } finally { Pop-Location }
+          git diff --stat
+          git config user.name 'Jin Xiao'
+          git config user.email 'jinxiao2010@gmail.com'
+          git add $part
+          git commit -s -m "fix($part): migrate registry error APIs to Distribution v3.1.2" -m 'For rambow-cloud/skopeo-win#69; preserve existing package and error identities across the coordinated source forks.'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot commit migrated sources' }
+          git push origin HEAD:$env:GITHUB_REF_NAME
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot push reviewed source branch' }
